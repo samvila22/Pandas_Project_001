@@ -1,0 +1,610 @@
+**Data Collection and Cleaning**
+
+import pandas as pd
+
+df_baseball = pd.read_csv("/content/Teams.csv")
+df_baseball=df_baseball[df_baseball["yearID"]<2016]
+df_baseball.columns
+
+df_baseball_salaries = pd.read_csv("/content/Salaries.csv")
+df_baseball_salaries.columns
+
+df_baseball_salaries_grouped = df_baseball_salaries.groupby(["teamID", "yearID"]).sum()
+df_baseball_salaries_grouped.head()
+
+df_baseball_salaries_2015 = df_baseball_salaries[df_baseball_salaries["yearID"] == 2015]
+df_baseball_salaries_2015
+
+df_baseball_salaries_2015_grouped = df_baseball_salaries_2015.groupby(["teamID", "yearID"]).sum()
+df_baseball_salaries_2015_grouped["salary"]
+
+df_baseball_teams_with_salary = df_baseball.merge(df_baseball_salaries_2015_grouped, on=["yearID", "teamID"], how="outer")
+
+df_baseball_teams_with_salary
+
+Tried bringing in the average salary of teams per year to use as another predictor. The salary values over time are too inconsistent. Impossible to adjust for inflation, salaries don't start until the 80s-2000s. If we were to go through with this, we would have to use a smaller number of years which isn't the most accurate 
+
+df_baseball["win percentage"] = df_baseball["W"]/df_baseball["G"]
+
+df_baseball["runs per AB"] = df_baseball["R"]/df_baseball["AB"]
+
+World Series data starts in 1884. Before that we will filter out.
+
+df_baseball = df_baseball[df_baseball["yearID"] >= 1884]
+
+Map for World Series winner
+
+df_baseball_ws = pd.read_csv("/content/SeriesPost.csv")
+
+df_baseball_ws = df_baseball_ws[df_baseball_ws["round"] == "WS"]
+
+df_baseball_ws = df_baseball_ws.rename(columns={"teamIDwinner": "teamID"})
+df_baseball_ws = df_baseball_ws.filter(["yearID", "teamID"])
+df_baseball_ws["wsWin"] = 1
+
+df_baseball.loc[(df_baseball["yearID"] == 1885) & (df_baseball["teamID"] == "CHN"), "teamID"] = "CHC"
+df_baseball.loc[(df_baseball["yearID"] == 1886) & (df_baseball["teamID"] == "SL4"), "teamID"] = "STL"
+df_baseball.loc[(df_baseball["yearID"] == 1888) & (df_baseball["teamID"] == "NY1"), "teamID"] = "NYG"
+df_baseball.loc[(df_baseball["yearID"] == 1889) & (df_baseball["teamID"] == "NY1"), "teamID"] = "NYG"
+df_baseball = df_baseball.merge(df_baseball_ws, on=["teamID", "yearID"], how="outer")
+df_baseball.fillna({'wsWin':0}, inplace=True)
+
+WS win is now a 1.0 0.0 indicator for whether or not the team won the world series. We will use this as our y train and will be trying to fit a model to predict who will win the World Series. 
+
+At this point, our group started trying to fit models to predict wsWin, like the first model in our Machine Learning section. However, we started running into issues, like the models not predicting any team to win, that steered us towards changing our approach. The rest of our models aim to predict Wins, a more manageable but still important statistic to predict in analysis of team success in baseball. 
+
+df_baseball_pitching = pd.read_csv("/content/Pitching.csv")
+df_baseball_pitching.loc[(df_baseball_pitching["yearID"] == 1885) & (df_baseball_pitching["teamID"] == "CHN"), "teamID"] = "CHC"
+df_baseball_pitching.loc[(df_baseball_pitching["yearID"] == 1886) & (df_baseball_pitching["teamID"] == "SL4"), "teamID"] = "STL"
+df_baseball_pitching.loc[(df_baseball_pitching["yearID"] == 1888) & (df_baseball_pitching["teamID"] == "NY1"), "teamID"] = "NYG"
+df_baseball_pitching.loc[(df_baseball_pitching["yearID"] == 1889) & (df_baseball_pitching["teamID"] == "NY1"), "teamID"] = "NYG"
+df_baseball_wins = df_baseball[["yearID", "teamID", "W"]]
+df_baseball_pitching_wins = df_baseball_pitching.merge(df_baseball_wins, on=["teamID", "yearID"], how="outer")
+df_baseball_pitching_wins = df_baseball_pitching_wins.rename(columns={"W_y": "teamWins"})
+df_baseball_pitching_wins = df_baseball_pitching_wins[df_baseball_pitching_wins["yearID"] == 2016]
+
+df_baseball_batting = pd.read_csv("/content/Batting.csv")
+df_baseball_batting.loc[(df_baseball_batting["yearID"] == 1885) & (df_baseball_batting["teamID"] == "CHN"), "teamID"] = "CHC"
+df_baseball_batting.loc[(df_baseball_batting["yearID"] == 1886) & (df_baseball_batting["teamID"] == "SL4"), "teamID"] = "STL"
+df_baseball_batting.loc[(df_baseball_batting["yearID"] == 1888) & (df_baseball_batting["teamID"] == "NY1"), "teamID"] = "NYG"
+df_baseball_batting.loc[(df_baseball_batting["yearID"] == 1889) & (df_baseball_batting["teamID"] == "NY1"), "teamID"] = "NYG"
+df_baseball_wins = df_baseball[["yearID", "teamID", "W"]]
+df_baseball_batting_wins = df_baseball_batting.merge(df_baseball_wins, on=["teamID", "yearID"], how="outer")
+df_baseball_batting_wins = df_baseball_batting_wins.rename(columns={"W_y": "teamWins"})
+df_baseball_batting_wins = df_baseball_batting_wins[df_baseball_batting_wins["yearID"] == 2016]
+
+**Data Exploration and Visualization**
+
+Here, we will be looking at scatterplots and correlations of variables in the dataset in order to better understand the data and get a ballpark on which predictors may be impactful.
+
+df_baseball.plot.scatter(x="yearID", y="G")
+
+Games played increased over time, stabilizing around 1920. Lack of games played can lead to discrepencies in regression models. 
+
+df_baseball_teams_with_salary.plot.scatter(x="salary", y="W")
+
+We will now move into looking at some visualizations and correlations regarding win percentage, essentially the same predictor as wins. 
+
+Salary by Wins Scatterplot
+
+df_baseball.plot.scatter(x="win percentage", y="ERA")
+
+Win perctentage generally goes up as ERA goes down. Lower ERA can help predict team success. 
+
+X = df_baseball["win percentage"]
+y = df_baseball["ERA"]
+X.corr(y)
+
+relatively strong negative corrleation
+
+df_baseball.plot.scatter(x="win percentage", y="runs per AB")
+
+X = df_baseball["win percentage"]
+y = df_baseball["runs per AB"]
+X.corr(y)
+
+Decent positive correlation between win percent and runs per AB
+
+df_baseball.plot.scatter(x="win percentage", y="H")
+
+X = df_baseball["win percentage"]
+y = df_baseball["H"]
+X.corr(y)
+
+Hits dont have that much of an impact on winning, not compared to ERA and runs per AB at least.
+
+Lets move into looking at wsWin. We'll be testing the correlation of several variables to wsWin.
+
+X = df_baseball["win percentage"]
+y = df_baseball["wsWin"]
+X.corr(y)
+
+X = df_baseball["ERA"]
+y = df_baseball["wsWin"]
+X.corr(y)
+
+Should be negative. Lower ERA means they gave up less runs
+
+X = df_baseball["runs per AB"]
+y = df_baseball["wsWin"]
+X.corr(y)
+
+X = df_baseball["SO"]
+y = df_baseball["wsWin"]
+X.corr(y)
+
+X = df_baseball["H"]
+y = df_baseball["wsWin"]
+X.corr(y)
+
+X = df_baseball["HR"]
+y = df_baseball["wsWin"]
+X.corr(y)
+
+**Machine Learning**
+
+from sklearn.compose import make_column_transformer
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.model_selection import cross_val_score
+X_train = df_baseball[["win percentage", "runs per AB", "ERA"]]
+y_train = df_baseball[["wsWin"]]
+pipeline = make_pipeline(
+      StandardScaler(),
+      KNeighborsRegressor(n_neighbors=4)
+  )
+
+pipeline.fit(X_train, y_train)
+
+scores = cross_val_score(pipeline, 
+                         X=X_train,
+                         y=y_train,
+                         scoring="r2",
+                         cv=4)
+scores.mean()
+
+Negative Rsquared because ERA is negatively correlated with winning (the lower the Earned Run Average, the more likely you are to win).
+
+From this point on, we're using our models to predict wins. We created 3 models for each of our 3 datasets: team stats, pitching stats, and batting stats.
+
+import pandas as pd
+df_baseball = pd.read_csv("/content/baseball.csv")
+df_baseball_batting_wins = pd.read_csv("/content/df_baseball_batting_wins.csv")
+df_baseball_pitching_wins = pd.read_csv("/content/df_baseball_pitching_wins.csv")
+
+**Team**
+
+import json
+import pandas as pd
+from pandas.io.json import json_normalize
+import requests
+from sklearn.model_selection import GridSearchCV
+import sklearn.preprocessing as sk
+from sklearn.compose import make_column_transformer, make_column_selector
+from sklearn.preprocessing import StandardScaler, OneHotEncoder,MinMaxScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+import numpy as np
+import math
+
+Model 1:
+
+maes_train = {}
+maes_test= {}
+errors=pd.DataFrame()
+ct = make_column_transformer(
+  (sk.StandardScaler(),["runs per AB","ERA","H"]),
+   remainder="drop"
+  )
+pipeline = make_pipeline(
+  ct,
+    KNeighborsRegressor(n_neighbors=10),
+)
+X_train=df_baseball[["runs per AB","ERA","H"]]
+y_train=df_baseball["W"]
+scores = cross_val_score(pipeline, 
+                          X=X_train,
+                          y=y_train,
+                          scoring="neg_mean_absolute_error",
+                          cv=10)
+
+
+-scores.mean()
+
+Model 2:
+
+maes_train = {}
+maes_test= {}
+errors=pd.DataFrame()
+ct = make_column_transformer(
+  (sk.StandardScaler(),["runs per AB","ERA","H","FP","SV"]),
+   remainder="drop"
+  )
+pipeline = make_pipeline(
+  ct,
+    KNeighborsRegressor(n_neighbors=10),
+)
+X_train=df_baseball[["runs per AB","ERA","H","FP","SV"]]
+y_train=df_baseball["W"]
+scores = cross_val_score(pipeline, 
+                          X=X_train,
+                          y=y_train,
+                          scoring="neg_mean_absolute_error",
+                          cv=10)
+
+
+-scores.mean()
+
+Model 3:
+
+maes_train = {}
+maes_test= {}
+errors=pd.DataFrame()
+for k in range(1,50):
+  ct = make_column_transformer(
+   (sk.StandardScaler(),["runs per AB","ERA","H","FP","SV"]),
+   remainder="drop"
+  )
+  pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=k),
+  )
+  X_train=df_baseball[["runs per AB","ERA","H","FP","SV"]]
+  y_train=df_baseball["W"]
+  scores = cross_val_score(pipeline, 
+                          X=X_train,
+                          y=y_train,
+                          scoring="neg_mean_absolute_error",
+                          cv=10)
+  pipeline.fit(X=X_train,
+              y=y_train)
+
+  y_pred = pipeline.predict(X_train)
+  maes_test[k] = -scores.mean()
+  maes_train[k] = mean_absolute_error(y_train,y_pred).mean()
+
+errors["training"] = pd.Series(maes_train)
+errors["testing"]=pd.Series(maes_test)
+
+errors.plot.line()
+
+search = GridSearchCV(pipeline,
+                           param_grid={
+                                
+                               "kneighborsregressor__n_neighbors": range(1,50)
+                           },
+                           scoring="neg_mean_absolute_error",
+                           cv=10)
+search.fit(X_train,y_train)
+search.best_estimator_
+
+maes_train = {}
+maes_test= {}
+errors=pd.DataFrame()
+ct = make_column_transformer(
+  (sk.StandardScaler(),["runs per AB","ERA","H","FP","SV"]),
+   remainder="drop"
+  )
+pipeline = make_pipeline(
+  ct,
+    KNeighborsRegressor(n_neighbors=11),
+)
+X_train=df_baseball[["runs per AB","ERA","H","FP","SV"]]
+y_train=df_baseball["W"]
+scores = cross_val_score(pipeline, 
+                          X=X_train,
+                          y=y_train,
+                          scoring="neg_mean_absolute_error",
+                          cv=10)
+
+
+-scores.mean()
+
+Model 3 is our strongest model as it has the lowest MAE, 4.4656.
+
+**Pitching**
+
+import numpy as np
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, PowerTransformer, OneHotEncoder
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.compose import make_column_transformer
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score
+
+Model 1:
+
+ct = make_column_transformer(
+    (StandardScaler(), ["SHO", "ER", "HR", "BB", "SO"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=20)
+)
+
+X_train = df_baseball_pitching_wins[["SHO", "ER", "HR", "BB", "SO"]]
+y_train = df_baseball_pitching_wins["teamWins"]
+
+# calculate errors from cross-validation
+cv_errs = -cross_val_score(pipeline, X=X_train,
+                            y=y_train,
+                            scoring="neg_mean_squared_error", cv=10)
+# calculate average of the cross-validation errors
+np.sqrt(cv_errs.mean())
+
+Model 2:
+
+ct = make_column_transformer(
+    (StandardScaler(), ["W_x", "G", "GS", "CG", "SHO", "SV", "H"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=40)
+)
+
+X_train = df_baseball_pitching_wins[["W_x", "G", "GS", "CG", "SHO", "SV", "H"]]
+y_train = df_baseball_pitching_wins["teamWins"]
+
+# calculate errors from cross-validation
+cv_errs = -cross_val_score(pipeline, X=X_train,
+                            y=y_train,
+                            scoring="neg_mean_squared_error", cv=10)
+# calculate average of the cross-validation errors
+np.sqrt(cv_errs.mean())
+
+Model 3:
+
+ct = make_column_transformer(
+    (MinMaxScaler(), ["W_x", "G", "GS", "CG", "SHO", "SV", "H", 
+                      "ER", "HR", "BB", "SO", "BK", "R"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=40)
+)
+
+X_train = df_baseball_pitching_wins[["W_x", "G", "GS", "CG", "SHO", "SV", "H", 
+                                    "ER", "HR", "BB", "SO", "BK", "R"]]
+y_train = df_baseball_pitching_wins["teamWins"]
+
+# calculate errors from cross-validation
+cv_errs = -cross_val_score(pipeline, X=X_train,
+                            y=y_train,
+                            scoring="neg_mean_squared_error", cv=10)
+# calculate average of the cross-validation errors
+np.sqrt(cv_errs.mean())
+
+Model 3 is our strongest model as it has the lowest MAE, 13.779.
+
+**Batting**
+
+Model 1:
+
+ct = make_column_transformer(
+    (StandardScaler(), ["R", "H"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=20)
+)
+
+X_train = df_baseball_batting_wins[["R", "H"]]
+y_train = df_baseball_batting_wins["W"]
+
+# calculate errors from cross-validation
+cv_errs = -cross_val_score(pipeline, X=X_train,
+                            y=y_train,
+                            scoring="neg_mean_squared_error", cv=10)
+# calculate average of the cross-validation errors
+np.sqrt(cv_errs.mean())
+
+Model 2:
+
+ct = make_column_transformer(
+    (PowerTransformer(), ["AB", "R", "H", "2B", "3B", "HR"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=20)
+)
+
+X_train = df_baseball_batting_wins[["AB", "R", "H", "2B", "3B", "HR"]]
+y_train = df_baseball_batting_wins["W"]
+
+# calculate errors from cross-validation
+cv_errs = -cross_val_score(pipeline, X=X_train,
+                            y=y_train,
+                            scoring="neg_mean_squared_error", cv=10)
+# calculate average of the cross-validation errors
+np.sqrt(cv_errs.mean())
+
+Model 3:
+
+ct = make_column_transformer(
+    (MinMaxScaler(), ["AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=40)
+)
+
+X_train = df_baseball_batting_wins[["AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO"]]
+y_train = df_baseball_batting_wins["W"]
+
+# calculate errors from cross-validation
+cv_errs = -cross_val_score(pipeline, X=X_train,
+                            y=y_train,
+                            scoring="neg_mean_squared_error", cv=10)
+# calculate average of the cross-validation errors
+np.sqrt(cv_errs.mean())
+
+Once again, Model 3 is our strongest model as it has the lowest MAE, with a score of 12.2047.
+
+**Final Analysis-2016 Comparison**
+
+Our models are based off a dataset that ends with the 2015 MLB season. We'll now run each of our 3 models on data from 2016 alone, and see which model came closest to predicting the true wins for MLB teams in 2016. 
+
+import pandas as pd
+df_team2016 = pd.read_csv("/content/Team2016.csv")
+df_baseball_batting_2016 = pd.read_csv("/content/Batting2016.csv")
+df_baseball_pitching_2016 = pd.read_csv("/content/Pitching2016.csv")
+
+Team Model Error:
+
+ct = make_column_transformer(
+   (sk.StandardScaler(),["runs per AB","ERA","H","FP","SV"]),
+   remainder="drop"
+  )
+pipeline = make_pipeline(
+    ct,
+    KNeighborsRegressor(n_neighbors=k),
+  )
+X_train=df_baseball[["runs per AB","ERA","H","FP","SV"]]
+y_train=df_baseball["W"]
+
+df_predict=pd.read_csv("/content/Team2016.csv")
+X_test=df_predict[["runs per AB","ERA","H","FP","SV"]]
+y_test=df_predict["W"]
+pipeline.fit(X_train,y_train)
+testPred=pipeline.predict(X_test)
+mean_absolute_error(y_test,testPred)
+
+Pitcher Model Error:
+
+from sklearn.metrics import mean_absolute_error
+ct2 = make_column_transformer(
+    (MinMaxScaler(), ["AB", "R", "H", "2B", "3B", "HR", "SB", "BB", "SO"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline2 = make_pipeline(
+    ct2,
+    KNeighborsRegressor(n_neighbors=20)
+)
+
+X_train2 = df_baseball_batting_wins[["AB", "R", "H", "2B", "3B", "HR", "SB", "BB", "SO"]]
+y_train2 = df_baseball_batting_wins["W"]
+x_test2 = df_baseball_batting_2016[["AB", "R", "H", "2B", "3B", "HR", "SB", "BB", "SO"]]
+y_test2 = df_baseball_batting_2016["W"]
+
+pipeline2.fit(X_train2, y_train2)
+batting_pred = pipeline2.predict(x_test2)
+
+mean_absolute_error(y_test2, batting_pred)
+
+Batter Model Error:
+
+from sklearn.metrics import mean_absolute_error
+ct3 = make_column_transformer(
+    (StandardScaler(), ["G", "CG", "SHO", "SV", "H", 
+                      "ER", "HR", "BB", "SO", "R"]),
+    remainder="drop"
+)
+
+# define pipeline
+pipeline3 = make_pipeline(
+    ct3,
+    KNeighborsRegressor(n_neighbors=40)
+)
+X_train3 = df_baseball_pitching_wins[["G", "CG", "SHO", "SV", "H", 
+                                    "ER", "HR", "BB", "SO", "R"]]
+y_train3 = df_baseball_pitching_wins["teamWins"]
+x_test3 = df_baseball_pitching_2016[["G", "CG", "SHO", "SV", "H", 
+                                    "ER", "HR", "BB", "SO", "R"]]
+y_test3 = df_baseball_pitching_2016["W"]
+
+pipeline3.fit(X_train3, y_train3)
+batting_pred = pipeline3.predict(x_test3)
+
+mean_absolute_error(y_test3, batting_pred)
+
+**After comparing our model predictions to the true wins of teams in 2016, we found that our Team dataset Model had the lowest Mean Absolute Error of 2.4303. This is our most accurate model and best predicts a teams wins.**
+
+**Predicting wins is somewhat redundant because we are using total data from the entire season at this point we already would also know how many wins a team had by the end of the season. However, the process of picking which variables to use in the regression model helps to isolate which stats are most important for a team wanting to maximize their wins.**
+
+**We decided to try and use the same predictors from our best model to get rankings for who is most likely to win the world series every year**
+
+maes_train = {}
+maes_test= {}
+errors=pd.DataFrame()
+ct = make_column_transformer(
+  (sk.StandardScaler(),["runs per AB","ERA","H","FP","SV"]),
+   remainder="drop"
+  )
+pipeline = make_pipeline(
+  ct,
+    KNeighborsClassifier(n_neighbors=40)
+)
+X_train=df_baseball[["runs per AB","ERA","H","FP","SV"]]
+y_train=df_baseball["wsWin"]
+scores = cross_val_score(pipeline, 
+                          X=X_train,
+                          y=y_train,
+                          scoring="neg_mean_absolute_error",
+                          cv=10)
+
+
+-scores.mean()
+
+df_predict=pd.read_csv("/content/Teams.csv")
+df_predict=df_predict[df_predict["yearID"]>2015]
+df_predict["runs per AB"]=df_predict["R"]/df_predict["AB"]
+X_test=df_predict[["runs per AB","ERA","H","FP","SV"]]
+
+pipeline.fit(X_train,y_train)
+testPred=pipeline.predict(X_test)
+
+
+probas_ = pipeline.predict_proba(X_test)
+prob=pd.DataFrame(probas_)
+df_predict.index=range(0,180)
+df_predict["pred"]=prob[1]
+df_predict[df_predict["yearID"]==2016].sort_values("pred",ascending=False)
+
+Chicago cubs were predicted most likely to win by the model and they did win
+
+df_predict[df_predict["yearID"]==2017].sort_values("pred",ascending=False)
+
+Astros were tied for highest probiblity amongst three other teams and they won the world series
+
+df_predict[df_predict["yearID"]==2018].sort_values("pred",ascending=False)
+
+Dodgers were tied with two other teams for highest probablility to win world series, and they ended up being the runner-up. The redsox were the underdog.
+
+df_predict[df_predict["yearID"]==2019].sort_values("pred",ascending=False)
+
+Astros tied highest probability to win the world series with Dodgers. Astros ended up being the runner up againsts the Nationals. The Nationals winning was very unlikely.
+
+df_predict[df_predict["yearID"]==2020].sort_values("pred",ascending=False)
+
+Dodgers tied most likely to win with three other teams. And they ended up winning the world series in 2020.
+
+df_predict[df_predict["yearID"]==2021].sort_values("pred",ascending=False)
+
+Astros were tied for second most likely to win by the model. And they ended up being the runner up in 2021.
